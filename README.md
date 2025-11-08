@@ -22,6 +22,12 @@ cd email-classifier-agent
 uv sync
 ```
 
+Install globally with uv:
+
+```bash
+uv pip install -e .
+```
+
 Or with pip:
 
 ```bash
