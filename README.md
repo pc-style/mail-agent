@@ -44,6 +44,21 @@ pip install -e .
 
 ### Configure
 
+**Recommended: Run the interactive setup wizard:**
+
+```bash
+email-classifier setup
+```
+
+This will guide you through:
+- OpenAI API key configuration
+- Email provider selection (Gmail/Outlook)
+- Gmail OAuth credentials setup
+- Outlook/Azure credentials setup
+- Advanced settings (optional)
+
+**Or configure manually:**
+
 Configuration is stored in `~/.mail-agent/`. Create the config directory and `.env` file:
 
 ```bash

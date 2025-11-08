@@ -4,12 +4,14 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+import shutil
 
+import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from config.settings import get_config, reload_config
+from config.settings import get_config, reload_config, get_config_dir
 from agent.orchestrator import EmailClassificationOrchestrator
 from ui.app import run_tui
 
@@ -111,6 +113,193 @@ def run_tui_mode(args):
     run_tui()
 
 
+async def run_setup(args):
+    """Interactive setup wizard."""
+    print_banner()
+    console.print("\n[bold cyan]Welcome to Email Classification Agent Setup![/bold cyan]\n")
+    console.print("This will guide you through configuring the agent.\n")
+
+    config_dir = get_config_dir()
+    env_file = config_dir / ".env"
+
+    # check if already configured
+    if env_file.exists():
+        overwrite = await questionary.confirm(
+            f"Configuration file already exists at {env_file}.\n"
+            "Do you want to overwrite it?",
+            default=False
+        ).ask_async()
+        if not overwrite:
+            console.print("\n[yellow]Setup cancelled.[/yellow]")
+            return
+
+    # collect configuration
+    config_lines = []
+
+    # OpenAI API Key
+    console.print("\n[bold]Step 1: OpenAI Configuration[/bold]")
+    openai_key = await questionary.password(
+        "Enter your OpenAI API key (sk-...):",
+        validate=lambda x: x.startswith("sk-") if x else False
+    ).ask_async()
+    if not openai_key:
+        console.print("\n[red]Setup cancelled - OpenAI API key is required[/red]")
+        return
+    
+    config_lines.append(f"OPENAI_API_KEY={openai_key}")
+
+    # OpenAI Model
+    model = await questionary.select(
+        "Select OpenAI model:",
+        choices=[
+            questionary.Choice("gpt-4o-mini (recommended - fast & cheap)", "gpt-4o-mini"),
+            questionary.Choice("gpt-4o (more powerful, expensive)", "gpt-4o"),
+            questionary.Choice("gpt-5-nano (advanced reasoning)", "gpt-5-nano"),
+        ],
+        default="gpt-4o-mini"
+    ).ask_async()
+    config_lines.append(f"OPENAI_MODEL={model}")
+
+    # Email Provider
+    console.print("\n[bold]Step 2: Email Provider[/bold]")
+    provider = await questionary.select(
+        "Select email provider:",
+        choices=[
+            questionary.Choice("Gmail", "gmail"),
+            questionary.Choice("Outlook", "outlook"),
+            questionary.Choice("Both", "both"),
+        ],
+        default="gmail"
+    ).ask_async()
+    config_lines.append(f"EMAIL_PROVIDER={provider}")
+
+    # Gmail Setup
+    if provider in ("gmail", "both"):
+        console.print("\n[bold]Step 3: Gmail Configuration[/bold]")
+        console.print("To use Gmail, you need OAuth credentials from Google Cloud Console.")
+        console.print("1. Go to https://console.cloud.google.com")
+        console.print("2. Create a project and enable Gmail API")
+        console.print("3. Create OAuth 2.0 Desktop App credentials")
+        console.print("4. Download the JSON file\n")
+
+        has_creds = await questionary.confirm(
+            "Do you have Gmail OAuth credentials ready?",
+            default=False
+        ).ask_async()
+
+        if has_creds:
+            creds_path = await questionary.path(
+                "Enter path to credentials.json file:",
+                default=str(config_dir / "credentials.json")
+            ).ask_async()
+            
+            if creds_path and Path(creds_path).exists():
+                # copy to config dir
+                target_creds = config_dir / "credentials.json"
+                shutil.copy(creds_path, target_creds)
+                console.print(f"[green]Copied credentials to {target_creds}[/green]")
+            else:
+                console.print("[yellow]Credentials file not found. You can add it later to ~/.mail-agent/credentials.json[/yellow]")
+        else:
+            console.print("\n[yellow]You can add credentials later by:")
+            console.print(f"  1. Download credentials.json from Google Cloud Console")
+            console.print(f"  2. Save it to {config_dir / 'credentials.json'}")
+            console.print(f"  3. Run: email-classifier tui[/yellow]\n")
+
+    # Outlook Setup
+    if provider in ("outlook", "both"):
+        console.print("\n[bold]Step 4: Outlook Configuration[/bold]")
+        console.print("To use Outlook, you need Azure App Registration credentials.\n")
+
+        has_outlook = await questionary.confirm(
+            "Do you have Outlook/Azure credentials ready?",
+            default=False
+        ).ask_async()
+
+        if has_outlook:
+            outlook_client_id = await questionary.text(
+                "Azure Client ID:"
+            ).ask_async()
+            if outlook_client_id:
+                config_lines.append(f"OUTLOOK_CLIENT_ID={outlook_client_id}")
+
+            outlook_secret = await questionary.password(
+                "Azure Client Secret:"
+            ).ask_async()
+            if outlook_secret:
+                config_lines.append(f"OUTLOOK_CLIENT_SECRET={outlook_secret}")
+
+            outlook_tenant = await questionary.text(
+                "Azure Tenant ID (or 'common' for multi-tenant):",
+                default="common"
+            ).ask_async()
+            if outlook_tenant:
+                config_lines.append(f"OUTLOOK_TENANT_ID={outlook_tenant}")
+
+            outlook_user = await questionary.text(
+                "Outlook User ID (userPrincipalName, e.g., user@example.com):"
+            ).ask_async()
+            if outlook_user:
+                config_lines.append(f"OUTLOOK_USER_ID={outlook_user}")
+        else:
+            console.print("\n[yellow]You can add Outlook credentials later to ~/.mail-agent/.env[/yellow]\n")
+
+    # Additional settings
+    console.print("\n[bold]Step 5: Advanced Settings (optional)[/bold]")
+    advanced = await questionary.confirm(
+        "Configure advanced settings?",
+        default=False
+    ).ask_async()
+
+    if advanced:
+        max_emails = await questionary.text(
+            "Max emails per run:",
+            default="100",
+            validate=lambda x: x.isdigit() and int(x) > 0 if x else True
+        ).ask_async()
+        if max_emails:
+            config_lines.append(f"MAX_EMAILS_PER_RUN={max_emails}")
+
+        batch_size = await questionary.text(
+            "Batch size:",
+            default="10",
+            validate=lambda x: x.isdigit() and int(x) > 0 if x else True
+        ).ask_async()
+        if batch_size:
+            config_lines.append(f"BATCH_SIZE={batch_size}")
+
+    # Write config
+    console.print(f"\n[bold]Writing configuration to {env_file}...[/bold]")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    
+    with open(env_file, "w") as f:
+        f.write("# Email Classification Agent Configuration\n")
+        f.write("# Generated by: email-classifier setup\n\n")
+        for line in config_lines:
+            f.write(line + "\n")
+
+    console.print(f"[green]Configuration saved to {env_file}[/green]")
+
+    # Copy categories.yaml if it doesn't exist
+    categories_file = config_dir / "categories.yaml"
+    if not categories_file.exists():
+        package_categories = Path(__file__).parent / "config" / "categories.yaml"
+        if package_categories.exists():
+            shutil.copy(package_categories, categories_file)
+            console.print(f"[green]Created default categories.yaml[/green]")
+
+    # Summary
+    console.print("\n[bold green]Setup Complete![/bold green]\n")
+    console.print("Next steps:")
+    if provider in ("gmail", "both"):
+        console.print("  1. Make sure ~/.mail-agent/credentials.json exists")
+        console.print("  2. Run: email-classifier tui")
+        console.print("  3. The first run will guide you through Gmail authentication")
+    else:
+        console.print("  1. Run: email-classifier tui")
+    console.print("\n")
+
+
 def run_config_check(args):
     """Check and display configuration."""
     print_banner()
@@ -155,6 +344,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Initial setup (interactive wizard)
+  email-classifier setup
+
   # Run with TUI (interactive mode)
   email-classifier tui
 
@@ -221,6 +413,12 @@ Examples:
         help="Check and display configuration"
     )
 
+    # Setup command
+    setup_parser = subparsers.add_parser(
+        "setup",
+        help="Interactive setup wizard"
+    )
+
     args = parser.parse_args()
 
     # Default to TUI if no command specified
@@ -234,6 +432,8 @@ Examples:
         asyncio.run(run_classify(args))
     elif args.command == "config-check":
         run_config_check(args)
+    elif args.command == "setup":
+        asyncio.run(run_setup(args))
     else:
         parser.print_help()
         sys.exit(1)
