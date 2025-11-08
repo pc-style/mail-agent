@@ -1,0 +1,108 @@
+# Email Classification Configuration
+# This file defines categories, keywords, and priority adjustments for automated email sorting.
+
+categories:
+  - name: "Security & 2FA"
+    description: "Multi-factor authentication codes, password resets, and critical security alerts."
+    keywords:
+      - "verification code"
+      - "authentication"
+      - "2FA"
+      - "OTP"
+      - "password reset"
+      - "security alert"
+      - "unusual sign-in"
+    priority_boost: 3  # Default (2) + 3 = 5 (Critical/Urgent)
+
+  - name: "Work & Projects"
+    description: "Professional correspondence, meeting invitations, project updates, and team discussions."
+    keywords:
+      - "meeting invitation"
+      - "project update"
+      - "deadline"
+      - "review request"
+      - "team sync"
+      - "report"
+      - "agenda"
+      - "client"
+    priority_boost: 2 # Default (2) + 2 = 4 (High)
+
+  - name: "Finance & Receipts"
+    description: "Invoices, payment confirmations, bank statements, and expense reports."
+    keywords:
+      - "receipt"
+      - "invoice"
+      - "payment confirmation"
+      - "order placed"
+      - "statement attached"
+      - "tax document"
+      - "subscription renewal"
+    priority_boost: 1 # Default (2) + 1 = 3 (Moderate)
+
+  - name: "Shipping & Delivery"
+    description: "Order confirmations, shipping notifications, and tracking information."
+    keywords:
+      - "shipped"
+      - "out for delivery"
+      - "tracking number"
+      - "order confirmation"
+      - "delivery update"
+    priority_boost: 1 # Default (2) + 1 = 3 (Moderate)
+
+  - name: "University/Academia"
+    description: "Academic correspondence, course materials, and university announcements."
+    keywords:
+      - "course schedule"
+      - "professor"
+      - "assignment"
+      - "lecture notes"
+      - "exam"
+      - "grade report"
+    priority_boost: 1 # Default (2) + 1 = 3 (Moderate)
+
+  - name: "Personal & Social"
+    description: "Correspondence from family, friends, and close social contacts."
+    keywords:
+      - "family"
+      - "friend"
+      - "personal"
+      - "get together"
+      - "social event"
+    priority_boost: 0 # Default (2) + 0 = 2 (Normal)
+
+  - name: "Newsletters & Reading"
+    description: "Subscriptions, weekly digests, and informative content."
+    keywords:
+      - "newsletter"
+      - "weekly digest"
+      - "unsubscribe"
+      - "read more"
+      - "curated news"
+    priority_boost: -1 # Default (2) - 1 = 1 (Low)
+
+  - name: "Promotions & Junk"
+    description: "Marketing emails, advertisements, and spam content."
+    keywords:
+      - "limited time offer"
+      - "sale now"
+      - "discount"
+      - "win a prize"
+      - "free money"
+      - "last chance"
+    priority_boost: -2 # Default (2) - 2 = 0 (Effectively 1 - Low)
+
+# Priority Levels
+# 1 = Low priority (Newsletters, non-critical reading)
+# 2 = Normal (Personal, routine notifications)
+# 3 = Moderate (Financial, transactional, shipping, academic)
+# 4 = High (Business, core projects)
+# 5 = Critical/Urgent (Security, 2FA)
+
+# Default priority for uncategorized emails
+default_priority: 2
+
+# Auto-apply labels/categories in email provider
+auto_apply_labels: true
+
+# Create labels/categories if they don't exist
+create_missing_labels: true
