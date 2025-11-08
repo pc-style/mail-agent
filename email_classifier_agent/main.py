@@ -283,7 +283,14 @@ async def run_setup(args):
     # Copy categories.yaml if it doesn't exist
     categories_file = config_dir / "categories.yaml"
     if not categories_file.exists():
-        package_categories = Path(__file__).parent / "config" / "categories.yaml"
+        # Try to find categories.yaml in package
+        package_categories = Path(__file__).parent.parent / "config" / "categories.yaml"
+        if not package_categories.exists():
+            # Try installed package location
+            import config
+            if hasattr(config, '__file__'):
+                package_categories = Path(config.__file__).parent / "categories.yaml"
+        
         if package_categories.exists():
             shutil.copy(package_categories, categories_file)
             console.print(f"[green]Created default categories.yaml[/green]")

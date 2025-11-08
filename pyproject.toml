@@ -32,14 +32,13 @@ dev = [
 ]
 
 [project.scripts]
-email-classifier = "main:main"
+email-classifier = "email_classifier_agent.main:main"
 
 [tool.uv]
 dev-dependencies = []
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent", "config", "mcp_clients", "models", "ui", "utils"]
-include = ["main.py"]
+packages = ["email_classifier_agent", "agent", "config", "mcp_clients", "models", "ui", "utils"]
 
 [build-system]
 requires = ["hatchling"]
