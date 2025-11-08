@@ -10,6 +10,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from models.schemas import CategoryDefinition, ClassificationConfig
 
 
+def get_config_dir() -> Path:
+    """Get the configuration directory (~/.mail-agent)."""
+    config_dir = Path.home() / ".mail-agent"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -47,11 +54,11 @@ Models support different APIs and parameters."""
     # File-based OAuth method (for interactive auth)
     gmail_credentials_path: Optional[str] = Field(
         default=None,
-        description="Path to Gmail OAuth credentials JSON file"
+        description="Path to Gmail OAuth credentials JSON file (defaults to ~/.mail-agent/credentials.json)"
     )
     gmail_token_path: Optional[str] = Field(
         default=None,
-        description="Path to Gmail OAuth token JSON file"
+        description="Path to Gmail OAuth token JSON file (defaults to ~/.mail-agent/token.json)"
     )
     # OAuth client credentials method (for headless/server automation)
     gmail_client_id: Optional[str] = Field(
@@ -85,9 +92,9 @@ Models support different APIs and parameters."""
     )
 
     # Classification Settings
-    categories_file: str = Field(
-        default="config/categories.yaml",
-        description="Path to categories configuration file"
+    categories_file: Optional[str] = Field(
+        default=None,
+        description="Path to categories configuration file (defaults to ~/.mail-agent/categories.yaml)"
     )
     batch_size: int = Field(default=10, ge=1, le=100, description="Number of emails to process per batch")
     max_emails_per_run: int = Field(
@@ -111,12 +118,40 @@ Models support different APIs and parameters."""
     tui_refresh_rate: int = Field(default=4, ge=1, le=60, description="TUI refresh rate per second")
     enable_rich_tracebacks: bool = Field(default=True, description="Enable rich tracebacks")
 
+    @classmethod
+    def _get_default_env_file(cls) -> Optional[str]:
+        """Get default .env file path from ~/.mail-agent."""
+        env_file = get_config_dir() / ".env"
+        return str(env_file) if env_file.exists() else None
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=None,  # Will be set via _env_file parameter
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
     )
+
+    def __init__(self, **kwargs):
+        """Initialize settings with default paths in ~/.mail-agent."""
+        config_dir = get_config_dir()
+        
+        # Set default paths if not provided
+        if "categories_file" not in kwargs or not kwargs.get("categories_file"):
+            kwargs["categories_file"] = str(config_dir / "categories.yaml")
+        
+        if "gmail_credentials_path" not in kwargs or not kwargs.get("gmail_credentials_path"):
+            kwargs["gmail_credentials_path"] = str(config_dir / "credentials.json")
+        
+        if "gmail_token_path" not in kwargs or not kwargs.get("gmail_token_path"):
+            kwargs["gmail_token_path"] = str(config_dir / "token.json")
+        
+        # Set env_file to ~/.mail-agent/.env if not specified
+        if "_env_file" not in kwargs:
+            env_file = config_dir / ".env"
+            if env_file.exists():
+                kwargs["_env_file"] = str(env_file)
+        
+        super().__init__(**kwargs)
 
     @field_validator("outlook_mcp_args")
     @classmethod
@@ -169,14 +204,60 @@ class ConfigurationManager:
         Initialize configuration manager.
 
         Args:
-            env_file: Optional path to .env file (defaults to .env in project root)
+            env_file: Optional path to .env file (defaults to ~/.mail-agent/.env)
         """
         if env_file and os.path.exists(env_file):
             self.settings = Settings(_env_file=env_file)
         else:
-            self.settings = Settings()
+            # Try ~/.mail-agent/.env first, then fall back to no env file
+            default_env = get_config_dir() / ".env"
+            if default_env.exists():
+                self.settings = Settings(_env_file=str(default_env))
+            else:
+                self.settings = Settings()
 
         self.classification_config: Optional[ClassificationConfig] = None
+        
+        # Create default categories.yaml if it doesn't exist
+        self._ensure_default_categories()
+
+    def _ensure_default_categories(self) -> None:
+        """Create default categories.yaml if it doesn't exist."""
+        categories_path = Path(self.settings.categories_file)
+        if not categories_path.exists():
+            # Copy from package if available, or create default
+            try:
+                # Try to find default categories in package
+                package_categories = Path(__file__).parent / "categories.yaml"
+                if package_categories.exists():
+                    import shutil
+                    shutil.copy(package_categories, categories_path)
+                else:
+                    # Create minimal default
+                    default_categories = {
+                        "categories": [
+                            {
+                                "name": "Security & 2FA",
+                                "description": "Multi-factor authentication codes, password resets, and critical security alerts.",
+                                "keywords": ["verification code", "authentication", "2FA", "OTP", "password reset"],
+                                "priority_boost": 3
+                            },
+                            {
+                                "name": "Work & Projects",
+                                "description": "Professional correspondence, meeting invitations, project updates.",
+                                "keywords": ["meeting", "project", "deadline"],
+                                "priority_boost": 2
+                            }
+                        ],
+                        "default_priority": 2,
+                        "auto_apply_labels": True,
+                        "create_missing_labels": True
+                    }
+                    with open(categories_path, "w", encoding="utf-8") as f:
+                        yaml.dump(default_categories, f, default_flow_style=False)
+            except Exception as e:
+                # If we can't create it, that's ok - will error later when loading
+                pass
 
     def load_categories(self) -> ClassificationConfig:
         """
@@ -189,6 +270,10 @@ class ConfigurationManager:
             FileNotFoundError: If categories file doesn't exist
             ValueError: If categories file is invalid
         """
+        # Ensure categories_file is set
+        if not self.settings.categories_file:
+            self.settings.categories_file = str(get_config_dir() / "categories.yaml")
+        
         categories_path = Path(self.settings.categories_file)
 
         if not categories_path.exists():

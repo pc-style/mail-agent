@@ -34,6 +34,9 @@ dev = [
 [project.scripts]
 email-classifier = "main:main"
 
+[tool.uv]
+dev-dependencies = []
+
 [tool.hatch.build.targets.wheel]
 packages = ["agent", "config", "mcp_clients", "models", "ui", "utils"]
 include = ["main.py"]

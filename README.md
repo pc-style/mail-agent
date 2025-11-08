@@ -16,9 +16,17 @@ AI-powered email classification and organization using OpenAI. Automatically cla
 
 ### Install
 
+**Recommended: Install as a tool with uv** (installs globally):
+
 ```bash
-git clone <repository-url>
-cd email-classifier-agent
+uv tool install git+https://github.com/pc-style/mail-agent.git
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/pc-style/mail-agent.git
+cd mail-agent
 uv sync
 ```
 
@@ -36,9 +44,11 @@ pip install -e .
 
 ### Configure
 
-Create `.env` file:
+Configuration is stored in `~/.mail-agent/`. Create the config directory and `.env` file:
 
 ```bash
+mkdir -p ~/.mail-agent
+cat > ~/.mail-agent/.env << 'EOF'
 # OpenAI
 OPENAI_API_KEY=sk-your-key-here
 OPENAI_MODEL=gpt-4o-mini
@@ -46,16 +56,23 @@ OPENAI_MAX_TOKENS=2000
 
 # Gmail
 EMAIL_PROVIDER=gmail
-GMAIL_CREDENTIALS_PATH=config/credentials.json
-GMAIL_TOKEN_PATH=config/token.json
+# Credentials will be stored in ~/.mail-agent/credentials.json
+# Token will be stored in ~/.mail-agent/token.json
+EOF
 ```
+
+**Note:** All configuration files are stored in `~/.mail-agent/`:
+- `~/.mail-agent/.env` - Environment variables
+- `~/.mail-agent/categories.yaml` - Category definitions (auto-created from defaults)
+- `~/.mail-agent/credentials.json` - Gmail OAuth credentials
+- `~/.mail-agent/token.json` - Gmail OAuth token
 
 ### Gmail Setup
 
 1. **Get OAuth credentials** from [Google Cloud Console](https://console.cloud.google.com):
    - Create project → Enable Gmail API
    - Create OAuth 2.0 Desktop App credentials
-   - Download JSON → save as `config/credentials.json`
+   - Download JSON → save as `~/.mail-agent/credentials.json`
 
 2. **Authenticate** (first run):
    ```bash
@@ -65,11 +82,11 @@ GMAIL_TOKEN_PATH=config/token.json
    from google_auth_oauthlib.flow import InstalledAppFlow
    from pathlib import Path
    
-   creds_file = Path('config/credentials.json')
-   token_file = Path('config/token.json')
+   creds_file = Path.home() / '.mail-agent' / 'credentials.json'
+   token_file = Path.home() / '.mail-agent' / 'token.json'
    
    flow = InstalledAppFlow.from_client_secrets_file(
-       creds_file, ['https://mail.google.com/'], redirect_uri='http://localhost:8080/'
+       str(creds_file), ['https://mail.google.com/'], redirect_uri='http://localhost:8080/'
    )
    creds = flow.run_local_server(port=8080, open_browser=True)
    
